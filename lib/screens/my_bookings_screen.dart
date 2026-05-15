@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../core/di/service_locator.dart';
 import '../services/user_booking_service.dart';
+import '../models/booking_model.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
@@ -18,7 +19,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   final ImagePicker _picker = ImagePicker();
   late Razorpay _razorpay;
 
-  List<dynamic> _bookings = [];
+  List<BookingModel> _bookings = [];
   bool _isLoading = true;
 
   final Map<String, String> _frontImages = {};
@@ -46,25 +47,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     super.dispose();
   }
 
-  double _parseDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
-  }
-
   Future<void> _fetchBookings() async {
     setState(() => _isLoading = true);
     final result = await _bookingService.getMyBookings();
-    if (result['success'] && mounted) {
+    if (result.success && mounted) {
       setState(() {
-        _bookings = result['data'];
+        _bookings = result.data ?? [];
         _isLoading = false;
       });
     } else if (mounted) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['message'])));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
     }
   }
 
@@ -99,11 +92,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     if (!mounted) return;
     setState(() => _isUploading[bookingId] = false);
 
-    if (result['success']) {
+    if (result.success) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aadhaar uploaded successfully!'), backgroundColor: Colors.green));
       _fetchBookings();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['message']), backgroundColor: Colors.redAccent));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message), backgroundColor: Colors.redAccent));
     }
   }
 
@@ -116,13 +109,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
     final orderResult = await _bookingService.createPaymentOrder(bookingId, phase, paymentOption: paymentOption);
 
-    if (!orderResult['success']) {
+    if (!orderResult.success) {
       setState(() => _processingBookingId = null);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(orderResult['message']), backgroundColor: Colors.redAccent));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(orderResult.message), backgroundColor: Colors.redAccent));
       return;
     }
 
-    final orderData = orderResult['data'];
+    final orderData = orderResult.data!;
 
     var options = {
       'key': orderData['keyId'],
@@ -156,11 +149,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
     if (!mounted) return;
 
-    if (verifyResult['success']) {
+    if (verifyResult.success) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment successful!'), backgroundColor: Colors.green));
       _fetchBookings();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(verifyResult['message']), backgroundColor: Colors.redAccent));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(verifyResult.message), backgroundColor: Colors.redAccent));
     }
 
     setState(() => _processingBookingId = null);
@@ -172,11 +165,107 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {}
+  
+  // --- POLICY LOGIC ---
+  void _showPolicyDialog() async {
+    showDialog(
+      context: context,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    
+    final result = await _bookingService.getCancellationPolicy();
+    
+    if (!mounted) return;
+    Navigator.pop(context); // Close loader
+
+    if (result.success) {
+      final List rules = result.data?['rules'] ?? [];
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Cancellation Policy'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: rules.length,
+              itemBuilder: (context, i) => ListTile(
+                leading: const Icon(Icons.rule, color: Colors.indigo),
+                title: Text(rules[i]['description'] ?? ''),
+                subtitle: rules[i]['refundPercentage'] != null ? Text('Refund: ${rules[i]['refundPercentage']}%') : null,
+              ),
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+    }
+  }
+  
+  // --- CANCELLATION LOGIC ---
+  Future<void> _handleCancelBooking(String bookingId, String reason) async {
+    setState(() => _isLoading = true);
+    final result = await _bookingService.cancelBooking(bookingId, reason);
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message), backgroundColor: Colors.green));
+      _fetchBookings();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message), backgroundColor: Colors.redAccent));
+    }
+  }
+
+  void _showCancellationDialog(BookingModel booking) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Booking'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Are you sure you want to cancel this booking? Refund will be processed as per policy.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Reason for Cancellation',
+                hintText: 'e.g. Change of plans',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Go Back')),
+          ElevatedButton(
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please provide a reason.')));
+                return;
+              }
+              Navigator.pop(context);
+              _handleCancelBooking(booking.id, reasonController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Confirm Cancellation', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
   // --- UI HELPERS ---
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return 'N/A';
-    return DateFormat('EEE, MMM dd yyyy, hh:mm a').format(DateTime.parse(dateStr).toLocal());
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'N/A';
+    return DateFormat('EEE, MMM dd yyyy, hh:mm a').format(date.toLocal());
   }
 
   Color _getStatusColor(String status) {
@@ -186,6 +275,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       case 'PENDING_PAYMENT': return Colors.blue;
       case 'ON_HOLD': return Colors.indigo;
       case 'CONFIRMED': return Colors.green;
+      case 'PENDING_CANCELLATION': return Colors.amber;
       case 'REJECTED':
       case 'CANCELLED': return Colors.red;
       default: return Colors.grey;
@@ -201,29 +291,37 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            onPressed: _showPolicyDialog,
+            tooltip: 'Cancellation Policy',
+          ),
+        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _bookings.isEmpty
-          ? const Center(child: Text('No bookings found.', style: TextStyle(fontSize: 16, color: Colors.grey)))
-          : ListView.builder(
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _bookings.isEmpty
+            ? const Center(child: Text('No bookings found.', style: TextStyle(fontSize: 16, color: Colors.grey)))
+            : ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _bookings.length,
         itemBuilder: (context, index) {
           final booking = _bookings[index];
-          final status = booking['status'] ?? 'UNKNOWN';
-          final pref = _paymentPreferences[booking['id']] ?? 'ONLINE';
+          final status = booking.status;
+          final pref = _paymentPreferences[booking.id] ?? 'ONLINE';
 
-          final financials = booking['financials'] ?? {};
-          final double base = _parseDouble(financials['calculatedAmount']);
-          final double deposit = _parseDouble(financials['securityDeposit']);
+          final financials = booking.financials;
+          final double base = financials?.calculatedAmount ?? 0;
+          final double deposit = financials?.securityDeposit ?? 0;
 
-          final double holdPaid = _parseDouble(financials['holdAmountPaid']);
-          final double advRequested = _parseDouble(financials['advanceAmountRequested']);
+          final double holdPaid = financials?.holdAmountPaid ?? 0;
+          final double advRequested = financials?.advanceAmountRequested ?? 0;
           final double advancePaid = holdPaid > 0 ? holdPaid : advRequested;
 
-          final bool isPartial = financials['paymentStatus'] == 'PARTIAL';
-          final bool isCompleted = financials['paymentStatus'] == 'COMPLETED';
+          final bool isPartial = financials?.paymentStatus == 'PARTIAL';
+          final bool isCompleted = financials?.paymentStatus == 'COMPLETED';
 
           final double amountPaid = isCompleted ? base : (isPartial ? advancePaid : 0);
           final double amountDue = base - amountPaid;
@@ -242,10 +340,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // 🚨 FIX 1: Wrap Facility Name in Expanded
                       Expanded(
                         child: Text(
-                          booking['facility']?['name'] ?? 'Facility',
+                          booking.facility?.name ?? 'Facility',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -281,7 +378,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text('Check-in', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
-                                Text(_formatDate(booking['schedule']?['startTime']), style: const TextStyle(fontWeight: FontWeight.w600)),
+                                Text(_formatDate(booking.schedule?.startTime), style: const TextStyle(fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
@@ -291,7 +388,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 const Text('Check-out', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
-                                Text(_formatDate(booking['schedule']?['endTime']), style: const TextStyle(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
+                                Text(_formatDate(booking.schedule?.endTime), style: const TextStyle(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
                               ],
                             ),
                           ),
@@ -301,7 +398,6 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       const Divider(),
                       const SizedBox(height: 8),
 
-                      // 🚨 FIX 2: Wrap Left Side Labels in Expanded
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,23 +463,34 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
                       if (status == 'PENDING_PAYMENT') ...[
                         const SizedBox(height: 16),
-                        if (booking['verification']?['aadharFrontImageUrl'] == null)
-                          _buildKycUploadSection(booking['id'])
+                        if (booking.verification?['aadharFrontImageUrl'] == null)
+                          _buildKycUploadSection(booking.id)
                         else
                           _buildPaymentSection(booking, pref),
                       ],
 
-                      if (status == 'ON_HOLD' && financials['paymentStatus'] == 'PARTIAL') ...[
+                      if (status == 'ON_HOLD' && financials?.paymentStatus == 'PARTIAL') ...[
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            icon: _processingBookingId == booking['id'] ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.payment),
-                            label: Text(_processingBookingId == booking['id'] ? 'Processing...' : 'Pay Remaining Balance'),
-                            onPressed: _processingBookingId != null ? null : () => _initiatePayment(booking['id'], 'REMAINING'),
+                            icon: _processingBookingId == booking.id ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.payment),
+                            label: Text(_processingBookingId == booking.id ? 'Processing...' : 'Pay Remaining Balance'),
+                            onPressed: _processingBookingId != null ? null : () => _initiatePayment(booking.id, 'REMAINING'),
                           ),
                         ),
                       ],
+                      const SizedBox(height: 16),
+                      // Cancellation Button Logic
+                      if (!['CANCELLED', 'PENDING_CANCELLATION', 'CHECKED_IN', 'CHECKED_OUT'].contains(status))
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton.icon(
+                            onPressed: () => _showCancellationDialog(booking),
+                            icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.red),
+                            label: const Text('Request Cancellation', style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -392,8 +499,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildKycUploadSection(String bookingId) {
     bool isUploading = _isUploading[bookingId] ?? false;
@@ -436,10 +544,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     );
   }
 
-  Widget _buildPaymentSection(dynamic booking, String currentPref) {
-    final double base = _parseDouble(booking['financials']?['calculatedAmount']);
-    final bool isHoldingAllowed = booking['financials']?['isHoldingAllowed'] == true;
-    final double holdPercent = _parseDouble(booking['financials']?['holdingPercentage'] ?? 20);
+  Widget _buildPaymentSection(BookingModel booking, String currentPref) {
+    final double base = booking.financials?.calculatedAmount ?? 0;
+    final bool isHoldingAllowed = booking.financials?.isHoldingAllowed == true;
+    final double holdPercent = booking.financials?.holdingPercentage ?? 20;
     final double holdAmount = base * (holdPercent / 100);
 
     return Container(
@@ -463,7 +571,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _paymentPreferences[booking['id']] = 'ONLINE'),
+                    onTap: () => setState(() => _paymentPreferences[booking.id] = 'ONLINE'),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(color: currentPref == 'ONLINE' ? Colors.green : Colors.transparent, borderRadius: const BorderRadius.horizontal(left: Radius.circular(7))),
@@ -473,7 +581,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _paymentPreferences[booking['id']] = 'OFFLINE'),
+                    onTap: () => setState(() => _paymentPreferences[booking.id] = 'OFFLINE'),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(color: currentPref == 'OFFLINE' ? Colors.green : Colors.transparent, borderRadius: const BorderRadius.horizontal(right: Radius.circular(7))),
@@ -490,7 +598,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _processingBookingId != null ? null : () => _initiatePayment(booking['id'], 'INITIAL', paymentOption: 'FULL'),
+                onPressed: _processingBookingId != null ? null : () => _initiatePayment(booking.id, 'INITIAL', paymentOption: 'FULL'),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white),
                 child: Text('Pay Full Rent (₹$base)'),
               ),
@@ -500,9 +608,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _processingBookingId != null ? null : () => _initiatePayment(booking['id'], 'INITIAL', paymentOption: 'HOLD'),
+                  onPressed: _processingBookingId != null ? null : () => _initiatePayment(booking.id, 'INITIAL', paymentOption: 'HOLD'),
                   style: OutlinedButton.styleFrom(foregroundColor: Colors.indigo, side: const BorderSide(color: Colors.indigo)),
-                  // 🚨 FIX 3: Preventing button text overflow
                   child: Text('Hold Dates for ₹$holdAmount ($holdPercent%)', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)),
                 ),
               ),
@@ -514,4 +621,4 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       ),
     );
   }
-}
+}

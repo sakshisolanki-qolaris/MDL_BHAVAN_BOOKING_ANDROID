@@ -5,10 +5,11 @@ import 'package:intl/intl.dart';
 import '../core/config/app_config.dart';
 import '../core/di/service_locator.dart';
 import '../services/booking_service.dart';
+import '../models/facility_model.dart';
 import 'booking_form_screen.dart';
 
 class FacilityDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> facility;
+  final FacilityModel facility;
 
   const FacilityDetailScreen({super.key, required this.facility});
 
@@ -26,9 +27,10 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
 
   String _getValidImageUrl(String? rawUrl) {
     if (rawUrl == null || rawUrl.isEmpty) return '';
+    final host = AppConfig.isDevelopment ? AppConfig.devHost : AppConfig.prodHost;
     return rawUrl
-        .replaceAll('127.0.0.1', AppConfig.apiHost)
-        .replaceAll('localhost', AppConfig.apiHost);
+        .replaceAll('127.0.0.1', host)
+        .replaceAll('localhost', host);
   }
 
   String _formatTimeOfDay(TimeOfDay time) {
@@ -65,12 +67,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     if (picked != null) setState(() => _startTime = picked);
   }
 
-// Inside lib/screens/facility_detail_screen.dart
-
   void _proceedToCheckout(bool isHourlyOrFlexible, bool isFixedSlot, int durationHours) async {
     DateTime finalStart; DateTime finalEnd; String finalStartTimeStr; String finalEndTimeStr;
 
-    // ... (Your existing validation logic for Start/End times goes here)
     if (isFixedSlot) {
       if (_singleDate == null || _selectedSlot == null) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a date and a time slot.')));
@@ -99,7 +98,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
 
     final bookingService = getIt<BookingService>();
     final result = await bookingService.checkAvailabilityAndPrice(
-      facilityId: widget.facility['id'],
+      facilityId: widget.facility.id,
       startDate: finalStart, endDate: finalEnd, startTime: finalStartTimeStr, endTime: finalEndTimeStr,
     );
 
@@ -109,11 +108,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     if (result['success']) {
       final responseData = result['data'];
 
-      // 🚨 SAFE EXTRACTION OF API FLAGS
       final bool isAvailable = responseData['isAvailable'] == true;
       final bool isPartiallyAvailable = responseData['isPartiallyAvailable'] == true;
 
-      // 1. FULLY AVAILABLE (Works perfectly!)
       if (isAvailable) {
         Navigator.push(
           context,
@@ -126,11 +123,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
           ),
         );
       }
-      // 2. PARTIALLY AVAILABLE (Launch the Orange Bottom Sheet)
       else if (isPartiallyAvailable) {
         _showPartialAvailabilitySheet(responseData, finalStart, finalEnd, finalStartTimeStr, finalEndTimeStr);
       }
-      // 3. FULLY BOOKED (Show a safe snackbar without crashing)
       else {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(responseData['message'] ?? 'Dates are fully booked.'), backgroundColor: Colors.redAccent)
@@ -141,11 +136,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     }
   }
 
-  // 🚨 THE NEW REACT-STYLE PARTIAL UI BOTTOM SHEET
   void _showPartialAvailabilitySheet(Map<String, dynamic> data, DateTime sDate, DateTime eDate, String sTime, String eTime) {
     final alternatives = data['availableAlternatives'] as List<dynamic>? ?? [];
 
-    // Calculate new total just like React does
     double newTotal = 0;
     for (var alt in alternatives) {
       newTotal += double.tryParse(alt['baseRate']?.toString() ?? '0') ?? 0;
@@ -179,7 +172,6 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
                 Text('Some items are booked. We can offer this alternative package:', style: TextStyle(color: Colors.orange.shade900)),
                 const SizedBox(height: 16),
 
-                // List of available items
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade200)),
@@ -214,10 +206,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
                     onPressed: () {
                       Navigator.pop(context); // Close the sheet
 
-                      // Mock a pricing map for the form
                       Map<String, dynamic> pseudoPricing = {
                         'baseCalculatedAmount': newTotal,
-                        'securityDepositRequired': 0, // Fallback since partial doesn't return this
+                        'securityDepositRequired': 0,
                         'estimatedTotal': newTotal,
                       };
 
@@ -228,7 +219,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
                             facility: widget.facility,
                             startDate: sDate, endDate: eDate, startTime: sTime, endTime: eTime,
                             pricingData: pseudoPricing,
-                            isPartial: true, // FLAG SET TO TRUE
+                            isPartial: true,
                             partialAlternatives: alternatives,
                           ),
                         ),
@@ -245,8 +236,6 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
       },
     );
   }
-
-  // --- DYNAMIC UI RENDERERS ---
 
   Widget _buildFixedDateSelector() {
     String dateDisplay = 'Select Check-in & Check-out';
@@ -420,14 +409,14 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final facility = widget.facility;
-    final name = facility['name'] ?? 'Unknown Facility';
-    final description = facility['description'] ?? 'No description available.';
+    final name = facility.name;
+    final description = facility.description ?? 'No description available.';
 
-    final price = facility['baseRate']?.toString() ?? facility['basePrice']?.toString() ?? facility['price']?.toString() ?? '0';
-    final capacity = facility['maxCapacity']?.toString() ?? facility['capacity']?.toString();
+    final price = facility.baseRate.toStringAsFixed(0);
+    final capacity = facility.maxCapacity?.toString();
 
-    final pricingType = facility['pricingType'] ?? 'FIXED';
-    final pricingDetails = facility['pricingDetails'] ?? {};
+    final pricingType = facility.pricingType ?? 'FIXED';
+    final pricingDetails = facility.pricingDetails ?? {};
     final slotType = pricingDetails['slotType'];
     final slots = pricingDetails['slots'] as List<dynamic>? ?? [];
     final int durationHours = int.tryParse(pricingDetails['durationHours']?.toString() ?? '1') ?? 1;
@@ -435,94 +424,91 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     bool isHourlyOrFlexible = pricingType == 'HOURLY' || (pricingType == 'SLOT' && slotType == 'FLEXIBLE');
     bool isFixedSlot = pricingType == 'SLOT' && slotType == 'FIXED' && slots.isNotEmpty;
 
-    List<String> validImages = (facility['images'] as List<dynamic>? ?? []).map((url) => _getValidImageUrl(url as String)).where((url) => url.isNotEmpty).toList();
-
     return Scaffold(
       backgroundColor: Colors.white,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 300.0, pinned: true, backgroundColor: Colors.white, foregroundColor: Colors.black87, elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: validImages.isNotEmpty
-                  ? PageView.builder(
-                  itemCount: validImages.length,
-                  onPageChanged: (idx) => setState(() => _currentImageIndex = idx),
-                  itemBuilder: (c, i) => CachedNetworkImage(imageUrl: validImages[i], fit: BoxFit.cover)
-              )
-                  : Container(color: Colors.grey[200], child: const Icon(Icons.apartment, size: 80, color: Colors.grey)),
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              expandedHeight: 300.0, pinned: true, backgroundColor: Colors.white, foregroundColor: Colors.black87, elevation: 0,
+              flexibleSpace: FlexibleSpaceBar(
+                background: facility.images.isNotEmpty
+                    ? PageView.builder(
+                    itemCount: facility.images.length,
+                    onPageChanged: (idx) => setState(() => _currentImageIndex = idx),
+                    itemBuilder: (c, i) => CachedNetworkImage(imageUrl: _getValidImageUrl(facility.images[i]), fit: BoxFit.cover)
+                )
+                    : Container(color: Colors.grey[200], child: const Icon(Icons.apartment, size: 80, color: Colors.grey)),
+              ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(child: Text(name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, height: 1.2))),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('₹$price', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
-                          const Text('/ base rate', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  if (capacity != null && capacity.isNotEmpty && capacity != 'null') ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.indigo.shade50, shape: BoxShape.circle), child: Icon(Icons.people_alt, color: Colors.indigo.shade700, size: 20)),
+                        Expanded(child: Text(name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, height: 1.2))),
                         const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Maximum Capacity', style: TextStyle(color: Colors.grey, fontSize: 12), overflow: TextOverflow.ellipsis),
-                              Text('Up to $capacity guests', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('₹$price', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
+                            const Text('/ base rate', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          ],
                         ),
                       ],
                     ),
-                    const Divider(height: 48),
+                    const SizedBox(height: 24),
+                    if (capacity != null && capacity.isNotEmpty && capacity != 'null') ...[
+                      Row(
+                        children: [
+                          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.indigo.shade50, shape: BoxShape.circle), child: Icon(Icons.people_alt, color: Colors.indigo.shade700, size: 20)),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Maximum Capacity', style: TextStyle(color: Colors.grey, fontSize: 12), overflow: TextOverflow.ellipsis),
+                                Text('Up to $capacity guests', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 48),
+                    ],
+                    const Text('About this package', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Text(description, style: TextStyle(fontSize: 15, color: Colors.grey[700], height: 1.6)),
+  
+                    const SizedBox(height: 32),
+                    const Divider(),
+                    const SizedBox(height: 24),
+  
+                    const Text('Select Your Schedule', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+  
+                    if (isFixedSlot)
+                      _buildSlotSelector(slots)
+                    else if (isHourlyOrFlexible)
+                      _buildFlexibleSelector(durationHours)
+                    else
+                      _buildFixedDateSelector(),
+  
+                    const SizedBox(height: 40),
                   ],
-                  const Text('About this package', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  Text(description, style: TextStyle(fontSize: 15, color: Colors.grey[700], height: 1.6)),
-
-                  const SizedBox(height: 32),
-                  const Divider(),
-                  const SizedBox(height: 24),
-
-                  // 🚨 FIX: MOVED THE DYNAMIC BOOKING UI HERE (Inside the scrollable body)
-                  const Text('Select Your Schedule', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-
-                  if (isFixedSlot)
-                    _buildSlotSelector(slots)
-                  else if (isHourlyOrFlexible)
-                    _buildFlexibleSelector(durationHours)
-                  else
-                    _buildFixedDateSelector(),
-
-                  const SizedBox(height: 40), // Extra padding so it's not hidden behind the checkout button
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-
-      // 🚨 FIX: ONLY THE "PROCEED" BUTTON REMAINS STICKY
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), // Reduced padding
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(color: Colors.white, boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -5))], borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
         child: SafeArea(
           child: SizedBox(
@@ -537,4 +523,5 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
       ),
     );
   }
-}
+
+}

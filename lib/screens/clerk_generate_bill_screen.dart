@@ -240,8 +240,9 @@ class _ClerkGenerateBillScreenState extends State<ClerkGenerateBillScreen> {
         foregroundColor: Colors.black,
         elevation: 1,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -477,8 +478,9 @@ class _ClerkGenerateBillScreenState extends State<ClerkGenerateBillScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _previewRow(String title, double amount, {bool isBold = false, Color? color, double fontSize = 14}) {
     return Padding(

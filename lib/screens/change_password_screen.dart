@@ -69,8 +69,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Change Password')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
@@ -162,6 +163,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               )
             ],
           ),
+        ),
         ),
       ),
     );

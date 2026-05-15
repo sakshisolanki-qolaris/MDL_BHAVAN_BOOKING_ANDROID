@@ -1,10 +1,10 @@
-// lib/widgets/facility_card.dart
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../core/config/app_config.dart';
+import '../models/facility_model.dart';
 
 class FacilityCard extends StatelessWidget {
-  final Map<String, dynamic> facility;
+  final FacilityModel facility;
   final VoidCallback onTap;
 
   const FacilityCard({
@@ -15,21 +15,21 @@ class FacilityCard extends StatelessWidget {
 
   String _getValidImageUrl(String? rawUrl) {
     if (rawUrl == null || rawUrl.isEmpty) return '';
+    // Use the devHost from AppConfig for replacements if in dev mode
+    final host = AppConfig.isDevelopment ? AppConfig.devHost : AppConfig.prodHost;
     return rawUrl
-        .replaceAll('127.0.0.1', AppConfig.apiHost)
-        .replaceAll('localhost', AppConfig.apiHost);
+        .replaceAll('127.0.0.1', host)
+        .replaceAll('localhost', host);
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = facility['name'] ?? 'Unknown Facility';
-    final description = facility['description'] ?? 'No description available.';
-    final price = facility['baseRate']?.toString() ?? '0';
-    final capacity = facility['maxCapacity']?.toString();
+    final name = facility.name;
+    final description = facility.description ?? 'No description available.';
+    final price = facility.baseRate.toStringAsFixed(0);
+    final capacity = facility.maxCapacity?.toString();
 
-    String? rawImageUrl = (facility['images'] != null && facility['images'].isNotEmpty)
-        ? facility['images'][0]
-        : null;
+    String? rawImageUrl = facility.images.isNotEmpty ? facility.images[0] : null;
     final validImageUrl = _getValidImageUrl(rawImageUrl);
 
     return Container(
@@ -46,7 +46,6 @@ class FacilityCard extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      // Wrap in Material & InkWell to make the whole card a button with a ripple effect
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -54,7 +53,6 @@ class FacilityCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // IMAGE HERO SECTION
               Stack(
                 children: [
                   SizedBox(
@@ -87,8 +85,6 @@ class FacilityCard extends StatelessWidget {
                   ),
                 ],
               ),
-
-              // CONTENT SECTION
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
@@ -118,7 +114,7 @@ class FacilityCard extends StatelessWidget {
                         else const SizedBox.shrink(),
                         const Spacer(),
                         ElevatedButton(
-                          onPressed: onTap, // Button also triggers the same onTap event
+                          onPressed: onTap,
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                             backgroundColor: Theme.of(context).colorScheme.primary,
@@ -139,4 +135,4 @@ class FacilityCard extends StatelessWidget {
       ),
     );
   }
-}
+}

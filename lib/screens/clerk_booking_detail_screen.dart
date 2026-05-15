@@ -569,7 +569,8 @@ class _ClerkBookingDetailScreenState extends State<ClerkBookingDetailScreen> {
               )
             ],
           ),
-          body: RefreshIndicator(
+          body: SafeArea(
+            child: RefreshIndicator(
             onRefresh: () async {
               _fetchDetails();
               await Future.wait([_detailsFuture, _invoiceFuture]);
@@ -934,6 +935,7 @@ class _ClerkBookingDetailScreenState extends State<ClerkBookingDetailScreen> {
                 ],
               ),
             ),
+          ),
           ),
           bottomNavigationBar: _buildBottomActions(status, data, invoice, hasKyc, securityDeposit),
         );

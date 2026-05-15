@@ -2,6 +2,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import '../core/network/api_client.dart';
+import '../models/user_model.dart';
+import '../models/api_response.dart';
 
 class AuthService {
   final ApiClient _apiClient;
@@ -10,22 +12,22 @@ class AuthService {
   AuthService(this._apiClient, this._storage);
 
   /// Single portal login that attempts Admin, then Clerk, then User endpoints.
-  Future<Map<String, dynamic>> login(String mobile, String password) async {
+  Future<ApiResponse<UserModel>> login(String mobile, String password) async {
     // 1. Attempt Admin Login First
-    var result = await _attemptLogin('/auth/admin/login', mobile, password, 'ADMIN');
-    if (result['success']) return result;
+    var response = await _attemptLogin('/auth/admin/login', mobile, password, 'ADMIN');
+    if (response.success) return response;
 
     // 2. Fallback to Clerk Login
-    result = await _attemptLogin('/auth/admin/clerk/login', mobile, password, 'CLERK');
-    if (result['success']) return result;
+    response = await _attemptLogin('/auth/admin/clerk/login', mobile, password, 'CLERK');
+    if (response.success) return response;
 
     // 3. Fallback to Standard User Login
-    result = await _attemptLogin('/auth/user/login', mobile, password, 'USER');
-    return result;
+    response = await _attemptLogin('/auth/user/login', mobile, password, 'USER');
+    return response;
   }
 
   // Private helper method to handle the API calls
-  Future<Map<String, dynamic>> _attemptLogin(String endpoint, String mobile, String password, String expectedRole) async {
+  Future<ApiResponse<UserModel>> _attemptLogin(String endpoint, String mobile, String password, String expectedRole) async {
     try {
       final response = await _apiClient.dio.post(endpoint, data: {
         'mobile': mobile,
@@ -35,30 +37,30 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = response.data['data'];
         final token = data['token'];
-        final role = data['user']['role'] ?? expectedRole;
+        final user = UserModel.fromJson(data['user'] ?? {});
+        final role = user.role.isNotEmpty ? user.role : expectedRole;
 
         if (token != null) {
           await _storage.write(key: 'jwt_token', value: token);
           await _storage.write(key: 'user_role', value: role);
 
-          return {
-            'success': true,
-            'message': response.data['message'] ?? 'Login Successful',
-            'role': role
-          };
+          return ApiResponse(
+            success: true,
+            message: response.data['message'] ?? 'Login Successful',
+            data: user,
+          );
         }
       }
-      return {'success': false, 'message': 'Token missing in response'};
+      return ApiResponse(success: false, message: 'Token missing in response');
     } on DioException catch (e) {
-      // If it's a 401 or 404, we just let it fail silently so the next waterfall step can run
-      final errorMessage = e.response?.data['message'] ?? e.message;
-      return {'success': false, 'message': errorMessage};
+      final errorMessage = e.response?.data['message'] ?? e.message ?? 'Unknown error';
+      return ApiResponse(success: false, message: errorMessage);
     } catch (e) {
-      return {'success': false, 'message': 'App Error: $e'};
+      return ApiResponse(success: false, message: 'App Error: $e');
     }
   }
 
-  Future<Map<String, dynamic>> register({
+  Future<ApiResponse<void>> register({
     required String name,
     required String mobile,
     required String password,
@@ -73,14 +75,14 @@ class AuthService {
       });
 
       if (response.statusCode == 201) {
-        return {'success': true, 'message': 'Registration Successful'};
+        return ApiResponse(success: true, message: 'Registration Successful');
       }
-      return {'success': false, 'message': 'Registration failed'};
+      return ApiResponse(success: false, message: 'Registration failed');
     } on DioException catch (e) {
-      final errorMessage = e.response?.data['message'] ?? e.message;
-      return {'success': false, 'message': errorMessage};
+      final errorMessage = e.response?.data['message'] ?? e.message ?? 'Unknown error';
+      return ApiResponse(success: false, message: errorMessage);
     } catch (e) {
-      return {'success': false, 'message': 'App Error: $e'};
+      return ApiResponse(success: false, message: 'App Error: $e');
     }
   }
 
@@ -89,4 +91,4 @@ class AuthService {
     await _storage.delete(key: 'jwt_token');
     await _storage.delete(key: 'user_role');
   }
-}
+}

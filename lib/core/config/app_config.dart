@@ -1,14 +1,30 @@
-class AppConfig {
-  // Use '127.0.0.1' when testing on a physical device via USB 
-  // after running BOTH commands: 
-  // adb reverse tcp:3000 tcp:3000
-  // adb reverse tcp:9000 tcp:9000
-  static const String apiHost = '127.0.0.1';
-  
-  // Use '10.0.2.2' ONLY when testing on the Android Emulator
-  // static const String apiHost = '10.0.2.2';
+import 'package:flutter/foundation.dart';
 
-  static const String apiPort = '3000';
-  static const String apiBaseUrl = 'http://$apiHost:$apiPort/api/v1';
+class AppConfig {
+  // Toggle this to false for production
+  static const bool isDevelopment = kDebugMode;
+
+  // Development Settings
+  static const String devHost = '127.0.0.1'; // Use '10.0.2.2' for Emulator
+  static const String devPort = '3000';
+  
+  // Production Settings (Replace with your real production domain)
+  static const String prodHost = 'api.mhmandalraipur.org';
+  static const String prodProtocol = 'https';
+
+  static String get apiBaseUrl {
+    if (isDevelopment) {
+      return 'http://$devHost:$devPort/api/v1';
+    } else {
+      return '$prodProtocol://$prodHost/api/v1';
+    }
+  }
+
+  static String get apiHost => isDevelopment ? devHost : prodHost;
+
+  // Timeouts
+  static const Duration connectTimeout = Duration(seconds: 15);
+  static const Duration receiveTimeout = Duration(seconds: 15);
 }
+
  

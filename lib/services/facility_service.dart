@@ -1,21 +1,22 @@
 import '../core/network/api_client.dart';
+import '../models/facility_model.dart';
 
 class FacilityService {
   final ApiClient _apiClient;
 
   FacilityService(this._apiClient);
 
-  Future<List<dynamic>> getFacilities() async {
+  Future<List<FacilityModel>> getFacilities() async {
     try {
       final response = await _apiClient.dio.get('/facilities');
 
       if (response.statusCode == 200) {
-        return response.data['data'] ?? [];
+        final List<dynamic> data = response.data['data'] ?? [];
+        return data.map((item) => FacilityModel.fromJson(item)).toList();
       }
       return [];
     } catch (e) {
-      print("Error fetching facilities: $e");
-      throw Exception('Failed to load facilities');
+      throw Exception('Failed to load facilities: $e');
     }
   }
-}
+}

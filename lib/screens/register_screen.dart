@@ -41,7 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = false);
     if (!mounted) return;
 
-    if (result['success']) {
+    if (result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Account created! Welcome to Maharashtra Mandal.'),
@@ -54,7 +54,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message']),
+          content: Text(result.message),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

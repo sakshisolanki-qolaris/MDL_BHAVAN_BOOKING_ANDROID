@@ -1,11 +1,11 @@
-// lib/screens/booking_form_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/di/service_locator.dart';
 import '../services/booking_service.dart';
+import '../models/facility_model.dart';
 
 class BookingFormScreen extends StatefulWidget {
-  final Map<String, dynamic> facility;
+  final FacilityModel facility;
   final DateTime startDate;
   final DateTime endDate;
   final String startTime;
@@ -27,6 +27,7 @@ class BookingFormScreen extends StatefulWidget {
     this.isPartial = false,
     this.partialAlternatives,
   });
+
 
   @override
   State<BookingFormScreen> createState() => _BookingFormScreenState();
@@ -55,7 +56,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
 
     // Determine facilityId: if it's a purely custom booking with a dummy facility, pass null.
     // Otherwise, pass the actual facility ID.
-    String? targetFacilityId = widget.facility['id'];
+    String? targetFacilityId = widget.facility.id;
     if (widget.isPartial && (targetFacilityId == 'custom' || targetFacilityId == null)) {
       targetFacilityId = null;
     }
@@ -148,8 +149,9 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
           foregroundColor: Colors.black87,
           elevation: 0
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
@@ -167,7 +169,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                        widget.facility['name'] ?? 'Custom Booking',
+                        widget.facility.id == 'custom' ? 'Custom Booking' : widget.facility.name,
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
                     ),
                     const SizedBox(height: 12),
@@ -288,6 +290,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

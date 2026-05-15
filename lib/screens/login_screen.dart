@@ -49,8 +49,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    if (result['success'] == true) {
-      final role = result['role'];
+    if (result.success) {
+      final role = result.data?.role;
       if (role == 'CLERK' || role == 'ADMIN') {
         _showDashboardSelector();
       } else {
@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Login failed'),
+          content: Text(result.message),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

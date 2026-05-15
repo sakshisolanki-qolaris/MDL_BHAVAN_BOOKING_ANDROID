@@ -11,6 +11,7 @@ import 'login_screen.dart';
 import 'facility_detail_screen.dart';
 import 'my_bookings_screen.dart';
 import 'profile_screen.dart';
+import '../models/facility_model.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -22,7 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _facilityService = getIt<FacilityService>();
   final _authService = getIt<AuthService>();
 
-  late Future<List<dynamic>> _facilitiesFuture;
+  late Future<List<FacilityModel>> _facilitiesFuture;
 
   @override
   void initState() {
@@ -96,65 +97,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(icon: const Icon(Icons.logout, color: Colors.redAccent), onPressed: _handleLogout),
         ],
       ),
-      body: FutureBuilder<List<dynamic>>(
-        future: _facilitiesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return _buildShimmerLoading();
-          if (snapshot.hasError) return const Center(child: Text('Failed to load facilities'));
-          if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('No data'));
-
-          final allFacilities = snapshot.data!;
-
-          // FILTERING LOGIC
-          // Packages & Complexes go to the main feed
-          final packages = allFacilities.where((f) =>
-          f['facilityType'] == 'PACKAGE' || f['facilityType'] == 'COMPLEX'
-          ).toList();
-
-          // Everything else (Rooms, Halls, Lawns, Mattresses) goes to the Custom Screen
-          final atomicFacilities = allFacilities.where((f) =>
-          f['facilityType'] != 'PACKAGE' && f['facilityType'] != 'COMPLEX'
-          ).toList();
-
-          return RefreshIndicator(
-            onRefresh: () async => _fetchFacilities(),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
-              // +1 for the Custom Builder Card at the top
-              itemCount: packages.length + 1,
-              itemBuilder: (context, index) {
-
-                // TOP ITEM: Custom Builder Card
-                if (index == 0) {
-                  return CustomBuilderCard(
-                    onTap: () {
+      body: SafeArea(
+        child: FutureBuilder<List<FacilityModel>>(
+          future: _facilitiesFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) return _buildShimmerLoading();
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text(
+                    'Failed to load facilities: ${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                ),
+              );
+            }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('No facilities available at the moment.'));
+  
+            final allFacilities = snapshot.data!;
+  
+            // FILTERING LOGIC
+            // Packages & Complexes go to the main feed
+            final packages = allFacilities.where((f) =>
+            f.facilityType == 'PACKAGE' || f.facilityType == 'COMPLEX'
+            ).toList();
+  
+            // Everything else (Rooms, Halls, Lawns, Mattresses) goes to the Custom Screen
+            final atomicFacilities = allFacilities.where((f) =>
+            f.facilityType != 'PACKAGE' && f.facilityType != 'COMPLEX'
+            ).toList();
+  
+            return RefreshIndicator(
+              onRefresh: () async => _fetchFacilities(),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+                // +1 for the Custom Builder Card at the top
+                itemCount: packages.length + 1,
+                itemBuilder: (context, index) {
+  
+                  // TOP ITEM: Custom Builder Card
+                  if (index == 0) {
+                    return CustomBuilderCard(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CustomFacilityScreen(atomicFacilities: atomicFacilities),
+                          ),
+                        );
+                      },
+                    );
+                  }
+  
+                  // REMAINING ITEMS: Standard Packages
+                  final packageData = packages[index - 1]; // Offset by 1
+                  return FacilityCard(
+                    facility: packageData,
+                      onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => CustomFacilityScreen(atomicFacilities: atomicFacilities),
+                          builder: (context) => FacilityDetailScreen(facility: packageData),
                         ),
                       );
                     },
                   );
-                }
-
-                // REMAINING ITEMS: Standard Packages
-                final packageData = packages[index - 1]; // Offset by 1
-                return FacilityCard(
-                  facility: packageData,
-                    onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => FacilityDetailScreen(facility: packageData),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          );
-        },
+                },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
